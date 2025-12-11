@@ -4,6 +4,16 @@
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 	let showDeleteConfirm = $state(false);
+	let selectedTagIds = $state(new Set(data.link.tags.map(t => t.id)));
+
+	function toggleTag(tagId: string) {
+		if (selectedTagIds.has(tagId)) {
+			selectedTagIds.delete(tagId);
+		} else {
+			selectedTagIds.add(tagId);
+		}
+		selectedTagIds = new Set(selectedTagIds);
+	}
 </script>
 
 <svelte:head>
@@ -69,6 +79,28 @@
 			/>
 			<label for="pinned" class="text-sm">Pin this link</label>
 		</div>
+
+		{#if data.allTags.length > 0}
+			<div>
+				<label class="block text-sm font-medium mb-2">Tags</label>
+				<div class="flex flex-wrap gap-2">
+					{#each data.allTags as tag (tag.id)}
+						<button
+							type="button"
+							onclick={() => toggleTag(tag.id)}
+							class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm transition-all {selectedTagIds.has(tag.id) ? 'ring-2 ring-white' : 'opacity-60 hover:opacity-100'}"
+							style="background-color: {tag.color}30; color: {tag.color}; border: 1px solid {tag.color}"
+						>
+							<span class="w-2 h-2 rounded-full" style="background-color: {tag.color}"></span>
+							{tag.name}
+						</button>
+					{/each}
+				</div>
+				{#each [...selectedTagIds] as tagId}
+					<input type="hidden" name="tags" value={tagId} />
+				{/each}
+			</div>
+		{/if}
 
 		<div class="flex gap-3">
 			<button

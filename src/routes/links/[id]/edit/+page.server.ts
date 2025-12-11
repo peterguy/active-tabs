@@ -1,19 +1,34 @@
 import { db } from '$lib/server/db';
-import { links } from '$lib/server/db/schema';
+import { links, tags, linkTags } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ params }) => {
 	const link = await db.query.links.findFirst({
-		where: eq(links.id, params.id)
+		where: eq(links.id, params.id),
+		with: {
+			linkTags: {
+				with: {
+					tag: true
+				}
+			}
+		}
 	});
 
 	if (!link) {
 		throw error(404, 'Link not found');
 	}
 
-	return { link };
+	const allTags = await db.select().from(tags).orderBy(tags.name);
+
+	return {
+		link: {
+			...link,
+			tags: link.linkTags.map(lt => lt.tag)
+		},
+		allTags
+	};
 };
 
 export const actions: Actions = {
@@ -23,6 +38,7 @@ export const actions: Actions = {
 		const title = formData.get('title')?.toString().trim() || null;
 		const description = formData.get('description')?.toString().trim() || null;
 		const pinned = formData.get('pinned') === 'on';
+		const tagIds = formData.getAll('tags').map(t => t.toString());
 
 		if (!url) {
 			return fail(400, { error: 'URL is required', url, title, description });
@@ -44,6 +60,16 @@ export const actions: Actions = {
 				updatedAt: new Date()
 			})
 			.where(eq(links.id, params.id));
+
+		await db.delete(linkTags).where(eq(linkTags.linkId, params.id));
+		if (tagIds.length > 0) {
+			await db.insert(linkTags).values(
+				tagIds.map(tagId => ({
+					linkId: params.id,
+					tagId
+				}))
+			);
+		}
 
 		throw redirect(303, '/');
 	},

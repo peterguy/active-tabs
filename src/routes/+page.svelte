@@ -1,8 +1,14 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 	let links = $state(structuredClone(data.links));
+	let searchQuery = $state(data.search);
+
+	$effect(() => {
+		links = structuredClone(data.links);
+	});
 
 	async function trackClick(linkId: string) {
 		await fetch(`/api/links/${linkId}/click`, { method: 'POST' });
@@ -36,6 +42,30 @@
 		const days = Math.floor(hours / 24);
 		return `${days}d ago`;
 	}
+
+	function handleSearch(e: Event) {
+		e.preventDefault();
+		const params = new URLSearchParams();
+		if (searchQuery) params.set('q', searchQuery);
+		if (data.tagFilter) params.set('tag', data.tagFilter);
+		goto(`/?${params.toString()}`, { keepFocus: true });
+	}
+
+	function clearFilters() {
+		searchQuery = '';
+		goto('/');
+	}
+
+	function filterByTag(tagId: string) {
+		const params = new URLSearchParams();
+		if (searchQuery) params.set('q', searchQuery);
+		if (data.tagFilter === tagId) {
+			goto(`/?${params.toString()}`);
+		} else {
+			params.set('tag', tagId);
+			goto(`/?${params.toString()}`);
+		}
+	}
 </script>
 
 <svelte:head>
@@ -43,25 +73,79 @@
 </svelte:head>
 
 <main class="max-w-4xl mx-auto p-6">
-	<header class="mb-8">
+	<header class="mb-6">
 		<h1 class="text-3xl font-bold text-[var(--color-text)]">Active Tabs</h1>
 		<p class="text-[var(--color-text-muted)] mt-2">Your links, organized and summarized.</p>
 	</header>
 
-	<section class="mb-6">
+	<div class="flex gap-3 mb-6">
+		<form onsubmit={handleSearch} class="flex-1 flex gap-2">
+			<input
+				type="search"
+				bind:value={searchQuery}
+				placeholder="Search links..."
+				class="flex-1 px-4 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)]"
+			/>
+			<button
+				type="submit"
+				class="px-4 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] hover:bg-[var(--color-surface-hover)] rounded-lg transition-colors"
+			>
+				Search
+			</button>
+		</form>
 		<a
 			href="/links/new"
 			class="inline-flex items-center gap-2 px-4 py-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white rounded-lg transition-colors"
 		>
-			<span class="text-xl">+</span>
-			Add Link
+			+ Add
 		</a>
-	</section>
+		<a
+			href="/tags"
+			class="px-4 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] hover:bg-[var(--color-surface-hover)] rounded-lg transition-colors"
+		>
+			Tags
+		</a>
+	</div>
+
+	{#if data.tags.length > 0}
+		<div class="flex flex-wrap gap-2 mb-6">
+			{#each data.tags as tag (tag.id)}
+				<button
+					onclick={() => filterByTag(tag.id)}
+					class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm transition-colors {data.tagFilter === tag.id ? 'ring-2 ring-white' : 'opacity-70 hover:opacity-100'}"
+					style="background-color: {tag.color}20; color: {tag.color}; border: 1px solid {tag.color}40"
+				>
+					<span class="w-2 h-2 rounded-full" style="background-color: {tag.color}"></span>
+					{tag.name}
+				</button>
+			{/each}
+		</div>
+	{/if}
+
+	{#if data.search || data.tagFilter}
+		<div class="mb-4 flex items-center gap-2 text-sm text-[var(--color-text-muted)]">
+			<span>
+				{links.length} result{links.length === 1 ? '' : 's'}
+				{#if data.search}for "{data.search}"{/if}
+				{#if data.tagFilter}
+					{@const activeTag = data.tags.find(t => t.id === data.tagFilter)}
+					{#if activeTag}in {activeTag.name}{/if}
+				{/if}
+			</span>
+			<button onclick={clearFilters} class="text-[var(--color-primary)] hover:underline">
+				Clear filters
+			</button>
+		</div>
+	{/if}
 
 	{#if links.length === 0}
 		<div class="text-center py-16 text-[var(--color-text-muted)]">
-			<p class="text-lg">No links yet.</p>
-			<p class="mt-2">Add your first link to get started!</p>
+			{#if data.search || data.tagFilter}
+				<p class="text-lg">No matching links found.</p>
+			{:else}
+				<p class="text-lg">No links yet.</p>
+				<p class="mt-2">Add your first link to get started!</p>
+			{/if}
 		</div>
 	{:else}
 		<ul class="space-y-3">
@@ -84,12 +168,26 @@
 								{link.description}
 							</p>
 						{/if}
-						<p class="text-xs text-[var(--color-text-muted)] mt-2">
-							{link.clickCount} click{link.clickCount === 1 ? '' : 's'}
-							{#if link.lastClickedAt}
-								· last used {formatRelativeTime(link.lastClickedAt)}
+						<div class="flex items-center gap-3 mt-2">
+							<p class="text-xs text-[var(--color-text-muted)]">
+								{link.clickCount} click{link.clickCount === 1 ? '' : 's'}
+								{#if link.lastClickedAt}
+									· last used {formatRelativeTime(link.lastClickedAt)}
+								{/if}
+							</p>
+							{#if link.tags && link.tags.length > 0}
+								<div class="flex gap-1">
+									{#each link.tags as tag (tag.id)}
+										<span
+											class="px-2 py-0.5 rounded-full text-xs"
+											style="background-color: {tag.color}20; color: {tag.color}"
+										>
+											{tag.name}
+										</span>
+									{/each}
+								</div>
 							{/if}
-						</p>
+						</div>
 					</div>
 					<div class="flex items-center gap-2">
 						<button
