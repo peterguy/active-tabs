@@ -51,9 +51,18 @@
 							</p>
 						{/if}
 					</div>
-					{#if link.pinned}
-						<span class="text-yellow-500" title="Pinned">📌</span>
-					{/if}
+					<div class="flex items-center gap-2">
+						{#if link.pinned}
+							<span class="text-yellow-500" title="Pinned">📌</span>
+						{/if}
+						<a
+							href="/links/{link.id}/edit"
+							class="opacity-0 group-hover:opacity-100 text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-opacity"
+							title="Edit"
+						>
+							✏️
+						</a>
+					</div>
 				</li>
 			{/each}
 		</ul>
