@@ -90,29 +90,33 @@ export async function listCredentials(): Promise<ServiceCredential[]> {
 	}));
 }
 
-export const SUPPORTED_SERVICES: { id: ServiceType; name: string; description: string; tokenUrl: string }[] = [
+export const SUPPORTED_SERVICES: { id: ServiceType; name: string; description: string; tokenUrl: string; tokenLabel: string }[] = [
 	{
 		id: 'github',
 		name: 'GitHub',
 		description: 'Access PRs, issues, and repositories',
-		tokenUrl: 'https://github.com/settings/tokens/new?scopes=repo,read:user'
+		tokenUrl: 'https://github.com/settings/tokens/new?scopes=repo,read:user',
+		tokenLabel: 'Personal Access Token'
 	},
 	{
 		id: 'slack',
 		name: 'Slack',
 		description: 'Access messages and channels',
-		tokenUrl: 'https://api.slack.com/apps'
+		tokenUrl: 'https://api.slack.com/apps',
+		tokenLabel: 'Bot Token'
 	},
 	{
 		id: 'linear',
 		name: 'Linear',
 		description: 'Access issues and projects',
-		tokenUrl: 'https://linear.app/settings/api'
+		tokenUrl: 'https://linear.app/settings/api',
+		tokenLabel: 'API Key'
 	},
 	{
 		id: 'notion',
 		name: 'Notion',
 		description: 'Access pages and databases',
-		tokenUrl: 'https://www.notion.so/my-integrations'
+		tokenUrl: 'https://www.notion.so/my-integrations',
+		tokenLabel: 'Integration Token'
 	}
 ];

@@ -78,7 +78,7 @@
 								}} class="mt-4 space-y-3">
 									<input type="hidden" name="service" value={service.id} />
 									<div>
-										<label for="token-{service.id}" class="block text-sm mb-1">Personal Access Token</label>
+										<label for="token-{service.id}" class="block text-sm mb-1">{service.tokenLabel}</label>
 										<input
 											type="password"
 											id="token-{service.id}"

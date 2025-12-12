@@ -39,10 +39,11 @@ export async function fetchLinearMetadata(url: string): Promise<PageMetadata | n
 	const cred = await getCredential('linear');
 	if (!cred) return null;
 
-	const match = url.match(/linear\.app\/[^/]+\/issue\/([A-Z]+-\d+)/);
+	// Match URLs like linear.app/workspace/issue/ENG-123 or linear.app/workspace/issue/ENG-123/title-slug
+	const match = url.match(/linear\.app\/[^/]+\/issue\/([A-Z]+-\d+)/i);
 	if (!match) return null;
 
-	const issueId = match[1];
+	const issueIdentifier = match[1].toUpperCase();
 
 	try {
 		const response = await fetch('https://api.linear.app/graphql', {
@@ -52,22 +53,46 @@ export async function fetchLinearMetadata(url: string): Promise<PageMetadata | n
 				'Content-Type': 'application/json'
 			},
 			body: JSON.stringify({
-				query: `query { issue(id: "${issueId}") { title description } }`
+				query: `
+					query GetIssue($id: String!) {
+						issue(id: $id) {
+							identifier
+							title
+							description
+							state {
+								name
+							}
+						}
+					}
+				`,
+				variables: { id: issueIdentifier }
 			})
 		});
 
-		if (!response.ok) return null;
+		if (!response.ok) {
+			console.error('Linear API error:', response.status, await response.text());
+			return null;
+		}
 
 		const data = await response.json();
+		
+		if (data.errors) {
+			console.error('Linear GraphQL errors:', data.errors);
+			return null;
+		}
+
 		const issue = data?.data?.issue;
 		if (!issue) return null;
 
+		const status = issue.state?.name ? ` [${issue.state.name}]` : '';
+		
 		return {
-			title: `${issueId}: ${issue.title}`,
+			title: `${issue.identifier}: ${issue.title}${status}`,
 			description: issue.description?.slice(0, 200) || null,
 			favicon: 'https://linear.app/favicon.ico'
 		};
-	} catch {
+	} catch (error) {
+		console.error('Linear fetch error:', error);
 		return null;
 	}
 }
