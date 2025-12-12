@@ -11,7 +11,12 @@
 	});
 
 	async function trackClick(linkId: string) {
-		await fetch(`/api/links/${linkId}/click`, { method: 'POST' });
+		fetch(`/api/links/${linkId}/click`, { method: 'POST' });
+		links = links.map(l =>
+			l.id === linkId
+				? { ...l, clickCount: l.clickCount + 1, lastClickedAt: new Date() }
+				: l
+		);
 	}
 
 	async function togglePin(linkId: string, currentPinned: boolean) {
@@ -189,17 +194,19 @@
 							{/if}
 						</div>
 					</div>
-					<div class="flex items-center gap-2">
+					<div class="flex items-center gap-1 shrink-0">
 						<button
-							onclick={() => togglePin(link.id, link.pinned)}
-							class="text-lg hover:scale-110 transition-transform {link.pinned ? 'text-yellow-500' : 'opacity-0 group-hover:opacity-50 hover:!opacity-100'}"
+							type="button"
+							onclick={(e) => { e.preventDefault(); e.stopPropagation(); togglePin(link.id, link.pinned); }}
+							class="text-lg hover:scale-110 transition-all cursor-pointer p-2 rounded hover:bg-[var(--color-bg)] {link.pinned ? 'text-yellow-500 opacity-100' : 'opacity-0 group-hover:opacity-60 hover:!opacity-100'}"
 							title={link.pinned ? 'Unpin' : 'Pin'}
+							style="pointer-events: auto;"
 						>
 							📌
 						</button>
 						<a
 							href="/links/{link.id}/edit"
-							class="opacity-0 group-hover:opacity-100 text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-opacity"
+							class="opacity-0 group-hover:opacity-100 text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-opacity p-2 rounded hover:bg-[var(--color-bg)]"
 							title="Edit"
 						>
 							✏️
