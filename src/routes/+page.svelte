@@ -5,6 +5,7 @@
 	let { data }: { data: PageData } = $props();
 	let links = $state(structuredClone(data.links));
 	let searchQuery = $state(data.search);
+	let animatingPinId: string | null = $state(null);
 
 	$effect(() => {
 		links = structuredClone(data.links);
@@ -21,7 +22,10 @@
 
 	async function togglePin(linkId: string, currentPinned: boolean) {
 		const newPinned = !currentPinned;
-		await fetch(`/api/links/${linkId}/pin`, {
+		
+		animatingPinId = linkId;
+		
+		fetch(`/api/links/${linkId}/pin`, {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ pinned: newPinned })
@@ -33,6 +37,10 @@
 			if (a.pinned !== b.pinned) return b.pinned ? 1 : -1;
 			return 0;
 		});
+
+		setTimeout(() => {
+			animatingPinId = null;
+		}, 600);
 	}
 
 	function formatRelativeTime(date: Date | null): string {
@@ -156,7 +164,7 @@
 		<ul class="space-y-3">
 			{#each links as link (link.id)}
 				<li
-					class="group flex items-start gap-4 p-4 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg border border-[var(--color-border)] transition-colors"
+					class="group flex items-start gap-4 p-4 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg border transition-all duration-300 {animatingPinId === link.id ? (link.pinned ? 'border-yellow-500 bg-yellow-500/10' : 'border-[var(--color-border)]') : 'border-[var(--color-border)]'}"
 				>
 					<div class="flex-1 min-w-0">
 						<a
@@ -198,7 +206,7 @@
 						<button
 							type="button"
 							onclick={(e) => { e.preventDefault(); e.stopPropagation(); togglePin(link.id, link.pinned); }}
-							class="text-lg hover:scale-110 transition-all cursor-pointer p-2 rounded hover:bg-[var(--color-bg)] {link.pinned ? 'text-yellow-500 opacity-100' : 'opacity-0 group-hover:opacity-60 hover:!opacity-100'}"
+							class="text-lg transition-all cursor-pointer p-2 rounded hover:bg-[var(--color-bg)] {link.pinned ? 'text-yellow-500 opacity-100' : 'opacity-0 group-hover:opacity-60 hover:!opacity-100'} {animatingPinId === link.id ? 'animate-bounce' : 'hover:scale-110'}"
 							title={link.pinned ? 'Unpin' : 'Pin'}
 							style="pointer-events: auto;"
 						>
