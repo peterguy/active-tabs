@@ -4,7 +4,7 @@ import { eq } from 'drizzle-orm';
 import { encrypt, decrypt } from './crypto';
 import { randomUUID } from 'crypto';
 
-export type ServiceType = 'github' | 'slack' | 'google' | 'linear' | 'notion';
+export type ServiceType = 'github' | 'slack' | 'linear' | 'notion';
 export type CredentialType = 'pat' | 'oauth' | 'api_key';
 
 export interface CredentialData {
@@ -102,12 +102,6 @@ export const SUPPORTED_SERVICES: { id: ServiceType; name: string; description: s
 		name: 'Slack',
 		description: 'Access messages and channels',
 		tokenUrl: 'https://api.slack.com/apps'
-	},
-	{
-		id: 'google',
-		name: 'Google',
-		description: 'Access Docs, Sheets, and Drive',
-		tokenUrl: 'https://console.cloud.google.com/apis/credentials'
 	},
 	{
 		id: 'linear',

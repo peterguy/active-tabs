@@ -1,5 +1,4 @@
 import { getCredential } from './credentials';
-import { getValidAccessToken } from './google-oauth';
 import type { PageMetadata } from './content-fetcher';
 
 export async function fetchGitHubMetadata(url: string): Promise<PageMetadata | null> {
@@ -108,60 +107,10 @@ export async function fetchNotionMetadata(url: string): Promise<PageMetadata | n
 	}
 }
 
-export async function fetchGoogleDocsMetadata(url: string): Promise<PageMetadata | null> {
-	const accessToken = await getValidAccessToken();
-	if (!accessToken) return null;
-
-	// Extract document ID from various Google URLs
-	const docMatch = url.match(/docs\.google\.com\/document\/d\/([a-zA-Z0-9_-]+)/);
-	const sheetMatch = url.match(/docs\.google\.com\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
-	const driveMatch = url.match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/);
-
-	let fileId: string | null = null;
-	let type: 'doc' | 'sheet' | 'file' = 'file';
-
-	if (docMatch) {
-		fileId = docMatch[1];
-		type = 'doc';
-	} else if (sheetMatch) {
-		fileId = sheetMatch[1];
-		type = 'sheet';
-	} else if (driveMatch) {
-		fileId = driveMatch[1];
-	}
-
-	if (!fileId) return null;
-
-	try {
-		const response = await fetch(
-			`https://www.googleapis.com/drive/v3/files/${fileId}?fields=name,mimeType,description`,
-			{
-				headers: {
-					'Authorization': `Bearer ${accessToken}`
-				}
-			}
-		);
-
-		if (!response.ok) return null;
-
-		const data = await response.json();
-		const prefix = type === 'doc' ? '📄' : type === 'sheet' ? '📊' : '📁';
-
-		return {
-			title: `${prefix} ${data.name}`,
-			description: data.description || null,
-			favicon: 'https://ssl.gstatic.com/docs/documents/images/kix-favicon7.ico'
-		};
-	} catch {
-		return null;
-	}
-}
-
-export function getServiceForUrl(url: string): 'github' | 'linear' | 'notion' | 'google' | null {
+export function getServiceForUrl(url: string): 'github' | 'linear' | 'notion' | null {
 	if (url.includes('github.com')) return 'github';
 	if (url.includes('linear.app')) return 'linear';
 	if (url.includes('notion.so')) return 'notion';
-	if (url.includes('docs.google.com') || url.includes('drive.google.com')) return 'google';
 	return null;
 }
 
@@ -175,8 +124,6 @@ export async function fetchServiceMetadata(url: string): Promise<PageMetadata | 
 			return fetchLinearMetadata(url);
 		case 'notion':
 			return fetchNotionMetadata(url);
-		case 'google':
-			return fetchGoogleDocsMetadata(url);
 		default:
 			return null;
 	}
