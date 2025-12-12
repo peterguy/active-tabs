@@ -142,6 +142,13 @@
 		>
 			Tags
 		</a>
+		<a
+			href="/settings"
+			class="px-4 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] hover:bg-[var(--color-surface-hover)] rounded-lg transition-colors"
+			title="Settings"
+		>
+			⚙️
+		</a>
 	</div>
 
 	{#if data.tags.length > 0}

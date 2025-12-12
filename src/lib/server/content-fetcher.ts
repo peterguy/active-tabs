@@ -1,3 +1,5 @@
+import { fetchServiceMetadata, getServiceForUrl } from './service-fetchers';
+
 export interface PageMetadata {
 	title: string | null;
 	description: string | null;
@@ -5,6 +7,16 @@ export interface PageMetadata {
 }
 
 export async function fetchPageMetadata(url: string): Promise<PageMetadata> {
+	// Try service-specific fetcher first if credentials are configured
+	const service = getServiceForUrl(url);
+	if (service) {
+		const serviceMetadata = await fetchServiceMetadata(url);
+		if (serviceMetadata && (serviceMetadata.title || serviceMetadata.description)) {
+			return serviceMetadata;
+		}
+	}
+
+	// Fall back to generic HTML scraping
 	try {
 		const response = await fetch(url, {
 			headers: {
