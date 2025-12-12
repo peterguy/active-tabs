@@ -6,6 +6,7 @@
 	let links = $state(structuredClone(data.links));
 	let searchQuery = $state(data.search);
 	let animatingPinId: string | null = $state(null);
+	let refreshingId: string | null = $state(null);
 
 	$effect(() => {
 		links = structuredClone(data.links);
@@ -41,6 +42,29 @@
 		setTimeout(() => {
 			animatingPinId = null;
 		}, 600);
+	}
+
+	async function refreshMetadata(linkId: string) {
+		refreshingId = linkId;
+		try {
+			const res = await fetch(`/api/links/${linkId}/fetch-metadata`, { method: 'POST' });
+			const result = await res.json();
+			if (result.success && result.metadata) {
+				links = links.map(l => {
+					if (l.id === linkId) {
+						return {
+							...l,
+							title: result.metadata.title || l.title,
+							description: result.metadata.description || l.description,
+							favicon: result.metadata.favicon || l.favicon
+						};
+					}
+					return l;
+				});
+			}
+		} finally {
+			refreshingId = null;
+		}
 	}
 
 	function formatRelativeTime(date: Date | null): string {
@@ -166,6 +190,14 @@
 				<li
 					class="group flex items-start gap-4 p-4 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg border transition-all duration-300 {animatingPinId === link.id ? (link.pinned ? 'border-yellow-500 bg-yellow-500/10' : 'border-[var(--color-border)]') : 'border-[var(--color-border)]'}"
 				>
+					{#if link.favicon}
+						<img
+							src={link.favicon}
+							alt=""
+							class="w-5 h-5 mt-0.5 rounded shrink-0"
+							onerror={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+						/>
+					{/if}
 					<div class="flex-1 min-w-0">
 						<a
 							href={link.url}
@@ -211,6 +243,15 @@
 							style="pointer-events: auto;"
 						>
 							📌
+						</button>
+						<button
+							type="button"
+							onclick={(e) => { e.preventDefault(); e.stopPropagation(); refreshMetadata(link.id); }}
+							class="opacity-0 group-hover:opacity-100 text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-opacity p-2 rounded hover:bg-[var(--color-bg)] {refreshingId === link.id ? 'animate-spin' : ''}"
+							title="Refresh metadata"
+							disabled={refreshingId === link.id}
+						>
+							🔄
 						</button>
 						<a
 							href="/links/{link.id}/edit"
