@@ -9,6 +9,7 @@ export const links = sqliteTable('links', {
 	summary: text('summary'),
 	favicon: text('favicon'),
 	pinned: integer('pinned', { mode: 'boolean' }).default(false).notNull(),
+	sortOrder: integer('sort_order').default(0).notNull(),
 	clickCount: integer('click_count').default(0).notNull(),
 	lastClickedAt: integer('last_clicked_at', { mode: 'timestamp' }),
 	createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
