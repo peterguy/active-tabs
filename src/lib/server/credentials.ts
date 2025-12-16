@@ -4,7 +4,7 @@ import { eq } from 'drizzle-orm';
 import { encrypt, decrypt } from './crypto';
 import { randomUUID } from 'crypto';
 
-export type ServiceType = 'github' | 'slack' | 'linear' | 'notion';
+export type ServiceType = 'github' | 'slack' | 'linear' | 'notion' | 'google';
 export type CredentialType = 'pat' | 'oauth' | 'api_key';
 
 export interface CredentialData {
@@ -90,11 +90,21 @@ export async function listCredentials(): Promise<ServiceCredential[]> {
 	}));
 }
 
-export const SUPPORTED_SERVICES: { id: ServiceType; name: string; description: string; tokenUrl: string; tokenLabel: string }[] = [
+export interface ServiceConfig {
+	id: ServiceType;
+	name: string;
+	description: string;
+	authType: 'token' | 'oauth';
+	tokenUrl?: string;
+	tokenLabel?: string;
+}
+
+export const SUPPORTED_SERVICES: ServiceConfig[] = [
 	{
 		id: 'github',
 		name: 'GitHub',
 		description: 'Access PRs, issues, and repositories',
+		authType: 'token',
 		tokenUrl: 'https://github.com/settings/tokens/new?scopes=repo,read:user',
 		tokenLabel: 'Personal Access Token'
 	},
@@ -102,21 +112,23 @@ export const SUPPORTED_SERVICES: { id: ServiceType; name: string; description: s
 		id: 'slack',
 		name: 'Slack',
 		description: 'Access messages and channels',
+		authType: 'token',
 		tokenUrl: 'https://api.slack.com/apps',
-		tokenLabel: 'Bot Token'
+		tokenLabel: 'User OAuth Token'
 	},
 	{
 		id: 'linear',
 		name: 'Linear',
 		description: 'Access issues and projects',
+		authType: 'token',
 		tokenUrl: 'https://linear.app/settings/api',
 		tokenLabel: 'API Key'
 	},
+
 	{
-		id: 'notion',
-		name: 'Notion',
-		description: 'Access pages and databases',
-		tokenUrl: 'https://www.notion.so/my-integrations',
-		tokenLabel: 'Integration Token'
+		id: 'google',
+		name: 'Google',
+		description: 'Access Google Docs and Sheets',
+		authType: 'oauth'
 	}
 ];
