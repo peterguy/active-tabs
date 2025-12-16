@@ -408,7 +408,7 @@ async function fetchLinearContent(url: string): Promise<string | null> {
 	const issueMatch = url.match(/linear\.app\/[^/]+\/issue\/([A-Z]+-\d+)/i);
 	if (!issueMatch) return null;
 
-	const issueId = issueMatch[1].toUpperCase();
+	const identifier = issueMatch[1].toUpperCase();
 
 	try {
 		const response = await fetch('https://api.linear.app/graphql', {
@@ -418,18 +418,52 @@ async function fetchLinearContent(url: string): Promise<string | null> {
 				'Content-Type': 'application/json'
 			},
 			body: JSON.stringify({
-				query: `query { issue(id: "${issueId}") { title description state { name } priority } }`
+				query: `
+					query GetIssue($id: String!) {
+						issue(id: $id) {
+							identifier
+							title
+							description
+							state { name }
+							priority
+							comments { nodes { body } }
+						}
+					}
+				`,
+				variables: { id: identifier }
 			})
 		});
 
-		if (!response.ok) return null;
+		if (!response.ok) {
+			console.error('Linear content fetch error:', response.status);
+			return null;
+		}
 
 		const data = await response.json();
+		if (data.errors) {
+			console.error('Linear GraphQL errors:', data.errors);
+			return null;
+		}
+		
 		const issue = data.data?.issue;
 		if (!issue) return null;
 
-		return `Issue ${issueId}: ${issue.title}\n\nState: ${issue.state?.name || 'Unknown'}\nPriority: ${issue.priority || 'None'}\n\n${issue.description || ''}`;
-	} catch {
+		let content = `Linear Issue ${issue.identifier}: ${issue.title}\n\nState: ${issue.state?.name || 'Unknown'}\nPriority: ${issue.priority || 'None'}\n\n${issue.description || '(No description)'}`;
+		
+		// Include comments for more context
+		const comments = issue.comments?.nodes || [];
+		if (comments.length > 0) {
+			content += '\n\n--- Comments ---\n';
+			for (const comment of comments.slice(0, 5)) {
+				if (comment.body) {
+					content += `\n${comment.body.slice(0, 300)}\n`;
+				}
+			}
+		}
+		
+		return content;
+	} catch (error) {
+		console.error('Linear content fetch error:', error);
 		return null;
 	}
 }
