@@ -1,4 +1,6 @@
 import { getCredential } from './credentials';
+import { getValidAccessToken } from './google-oauth';
+import { fetchNotionPageViaMCP } from './mcp-notion';
 import type { PageMetadata } from './content-fetcher';
 
 export async function fetchGitHubMetadata(url: string): Promise<PageMetadata | null> {
@@ -39,17 +41,25 @@ export async function fetchLinearMetadata(url: string): Promise<PageMetadata | n
 	const cred = await getCredential('linear');
 	if (!cred) return null;
 
-	// Match URLs like linear.app/workspace/issue/ENG-123 or linear.app/workspace/issue/ENG-123/title-slug
-	const match = url.match(/linear\.app\/[^/]+\/issue\/([A-Z]+-\d+)/i);
-	if (!match) return null;
+	const issueMatch = url.match(/linear\.app\/[^/]+\/issue\/([A-Z]+-\d+)/i);
+	if (issueMatch) {
+		return fetchLinearIssue(cred.token, issueMatch[1].toUpperCase());
+	}
 
-	const issueIdentifier = match[1].toUpperCase();
+	const projectMatch = url.match(/linear\.app\/[^/]+\/project\/([a-z0-9-]+)/i);
+	if (projectMatch) {
+		return fetchLinearProject(cred.token, projectMatch[1]);
+	}
 
+	return null;
+}
+
+async function fetchLinearIssue(token: string, identifier: string): Promise<PageMetadata | null> {
 	try {
 		const response = await fetch('https://api.linear.app/graphql', {
 			method: 'POST',
 			headers: {
-				'Authorization': cred.token,
+				'Authorization': token,
 				'Content-Type': 'application/json'
 			},
 			body: JSON.stringify({
@@ -59,13 +69,11 @@ export async function fetchLinearMetadata(url: string): Promise<PageMetadata | n
 							identifier
 							title
 							description
-							state {
-								name
-							}
+							state { name }
 						}
 					}
 				`,
-				variables: { id: issueIdentifier }
+				variables: { id: identifier }
 			})
 		});
 
@@ -75,7 +83,6 @@ export async function fetchLinearMetadata(url: string): Promise<PageMetadata | n
 		}
 
 		const data = await response.json();
-		
 		if (data.errors) {
 			console.error('Linear GraphQL errors:', data.errors);
 			return null;
@@ -85,7 +92,6 @@ export async function fetchLinearMetadata(url: string): Promise<PageMetadata | n
 		if (!issue) return null;
 
 		const status = issue.state?.name ? ` [${issue.state.name}]` : '';
-		
 		return {
 			title: `${issue.identifier}: ${issue.title}${status}`,
 			description: issue.description?.slice(0, 200) || null,
@@ -97,58 +103,234 @@ export async function fetchLinearMetadata(url: string): Promise<PageMetadata | n
 	}
 }
 
-export async function fetchNotionMetadata(url: string): Promise<PageMetadata | null> {
-	const cred = await getCredential('notion');
-	if (!cred) return null;
-
-	const match = url.match(/notion\.so\/(?:[^/]+\/)?([a-f0-9]{32})/);
-	if (!match) return null;
-
-	const pageId = match[1];
-	const formattedId = `${pageId.slice(0, 8)}-${pageId.slice(8, 12)}-${pageId.slice(12, 16)}-${pageId.slice(16, 20)}-${pageId.slice(20)}`;
-
+async function fetchLinearProject(token: string, slugId: string): Promise<PageMetadata | null> {
 	try {
-		const response = await fetch(`https://api.notion.com/v1/pages/${formattedId}`, {
+		const response = await fetch('https://api.linear.app/graphql', {
+			method: 'POST',
 			headers: {
-				'Authorization': `Bearer ${cred.token}`,
-				'Notion-Version': '2022-06-28'
-			}
+				'Authorization': token,
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({
+				query: `
+					query GetProject($slugId: String!) {
+						project(id: $slugId) {
+							name
+							description
+							state
+						}
+					}
+				`,
+				variables: { slugId }
+			})
 		});
 
-		if (!response.ok) return null;
+		if (!response.ok) {
+			console.error('Linear API error:', response.status, await response.text());
+			return null;
+		}
 
 		const data = await response.json();
-		const title = data.properties?.title?.title?.[0]?.plain_text ||
-			data.properties?.Name?.title?.[0]?.plain_text ||
-			'Notion Page';
+		if (data.errors) {
+			console.error('Linear GraphQL errors:', data.errors);
+			return null;
+		}
 
+		const project = data?.data?.project;
+		if (!project) return null;
+
+		const status = project.state ? ` [${project.state}]` : '';
 		return {
-			title,
-			description: null,
-			favicon: 'https://www.notion.so/images/favicon.ico'
+			title: `${project.name}${status}`,
+			description: project.description?.slice(0, 200) || null,
+			favicon: 'https://linear.app/favicon.ico'
 		};
-	} catch {
+	} catch (error) {
+		console.error('Linear fetch error:', error);
 		return null;
 	}
 }
 
-export function getServiceForUrl(url: string): 'github' | 'linear' | 'notion' | null {
+export async function fetchSlackMetadata(url: string): Promise<PageMetadata | null> {
+	const cred = await getCredential('slack');
+	if (!cred) return null;
+
+	// Match URLs like slack.com/archives/C12345678/p1234567890123456
+	// or app.slack.com/client/T.../C.../p...
+	const archiveMatch = url.match(/slack\.com\/archives\/([A-Z0-9]+)(?:\/p(\d+))?/i);
+	if (!archiveMatch) return null;
+
+	const channelId = archiveMatch[1];
+	const messageTs = archiveMatch[2]
+		? `${archiveMatch[2].slice(0, 10)}.${archiveMatch[2].slice(10)}`
+		: null;
+
+	try {
+		// First get channel info
+		const channelRes = await fetch(
+			`https://slack.com/api/conversations.info?channel=${channelId}`,
+			{
+				headers: { Authorization: `Bearer ${cred.token}` }
+			}
+		);
+		const channelData = await channelRes.json();
+
+		if (!channelData.ok) {
+			console.error('Slack API error:', channelData.error);
+			return null;
+		}
+
+		const channelName = channelData.channel?.name || channelId;
+
+		// If we have a message timestamp, fetch that specific message
+		if (messageTs) {
+			const historyRes = await fetch(
+				`https://slack.com/api/conversations.history?channel=${channelId}&oldest=${messageTs}&inclusive=true&limit=1`,
+				{
+					headers: { Authorization: `Bearer ${cred.token}` }
+				}
+			);
+			const historyData = await historyRes.json();
+
+			if (!historyData.ok) {
+				console.error('Slack history API error:', historyData.error);
+			} else if (historyData.messages?.[0]) {
+				const msg = historyData.messages[0];
+				const text = msg.text?.slice(0, 100) || '';
+				return {
+					title: `#${channelName}: "${text}${text.length >= 100 ? '...' : ''}"`,
+					description: msg.text?.slice(0, 200) || null,
+					favicon: 'https://a.slack-edge.com/cebaa/img/ico/favicon.ico'
+				};
+			}
+		}
+
+		// Just return channel info
+		return {
+			title: `#${channelName}`,
+			description: channelData.channel?.purpose?.value || channelData.channel?.topic?.value || null,
+			favicon: 'https://a.slack-edge.com/cebaa/img/ico/favicon.ico'
+		};
+	} catch (error) {
+		console.error('Slack fetch error:', error);
+		return null;
+	}
+}
+
+export async function fetchNotionMetadata(url: string): Promise<PageMetadata | null> {
+	// Use MCP OAuth approach (lazy-connects if tokens exist)
+	console.log('Notion: Fetching via MCP...');
+	try {
+		const mcpResult = await fetchNotionPageViaMCP(url);
+		if (mcpResult) {
+			console.log('Notion: MCP fetch succeeded:', mcpResult.title);
+			return {
+				title: mcpResult.title,
+				description: mcpResult.description || null,
+				favicon: 'https://www.notion.so/images/favicon.ico'
+			};
+		}
+		console.log('Notion: MCP fetch returned null (not connected or page not accessible)');
+	} catch (error) {
+		console.error('Notion: MCP fetch failed:', error);
+	}
+	return null;
+}
+
+export async function fetchGoogleMetadata(url: string): Promise<PageMetadata | null> {
+	const accessToken = await getValidAccessToken();
+	if (!accessToken) return null;
+
+	// Match Google Docs URLs
+	const docsMatch = url.match(/docs\.google\.com\/document\/d\/([a-zA-Z0-9_-]+)/);
+	if (docsMatch) {
+		return fetchGoogleDoc(accessToken, docsMatch[1]);
+	}
+
+	// Match Google Sheets URLs
+	const sheetsMatch = url.match(/docs\.google\.com\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+	if (sheetsMatch) {
+		return fetchGoogleSheet(accessToken, sheetsMatch[1]);
+	}
+
+	return null;
+}
+
+async function fetchGoogleDoc(accessToken: string, docId: string): Promise<PageMetadata | null> {
+	try {
+		const response = await fetch(
+			`https://docs.googleapis.com/v1/documents/${docId}?fields=title`,
+			{
+				headers: { Authorization: `Bearer ${accessToken}` }
+			}
+		);
+
+		if (!response.ok) {
+			console.error('Google Docs API error:', response.status, await response.text());
+			return null;
+		}
+
+		const data = await response.json();
+		return {
+			title: data.title || 'Google Doc',
+			description: null,
+			favicon: 'https://ssl.gstatic.com/docs/documents/images/kix-favicon7.ico'
+		};
+	} catch (error) {
+		console.error('Google Docs fetch error:', error);
+		return null;
+	}
+}
+
+async function fetchGoogleSheet(accessToken: string, sheetId: string): Promise<PageMetadata | null> {
+	try {
+		const response = await fetch(
+			`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=properties.title`,
+			{
+				headers: { Authorization: `Bearer ${accessToken}` }
+			}
+		);
+
+		if (!response.ok) {
+			console.error('Google Sheets API error:', response.status, await response.text());
+			return null;
+		}
+
+		const data = await response.json();
+		return {
+			title: data.properties?.title || 'Google Sheet',
+			description: null,
+			favicon: 'https://ssl.gstatic.com/docs/spreadsheets/favicon3.ico'
+		};
+	} catch (error) {
+		console.error('Google Sheets fetch error:', error);
+		return null;
+	}
+}
+
+export function getServiceForUrl(url: string): 'github' | 'linear' | 'slack' | 'notion' | 'google' | null {
 	if (url.includes('github.com')) return 'github';
 	if (url.includes('linear.app')) return 'linear';
+	if (url.includes('slack.com')) return 'slack';
 	if (url.includes('notion.so')) return 'notion';
+	if (url.includes('docs.google.com')) return 'google';
 	return null;
 }
 
 export async function fetchServiceMetadata(url: string): Promise<PageMetadata | null> {
 	const service = getServiceForUrl(url);
-	
+
 	switch (service) {
 		case 'github':
 			return fetchGitHubMetadata(url);
 		case 'linear':
 			return fetchLinearMetadata(url);
+		case 'slack':
+			return fetchSlackMetadata(url);
 		case 'notion':
 			return fetchNotionMetadata(url);
+		case 'google':
+			return fetchGoogleMetadata(url);
 		default:
 			return null;
 	}

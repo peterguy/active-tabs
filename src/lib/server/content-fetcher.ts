@@ -33,10 +33,13 @@ export async function fetchPageMetadata(url: string): Promise<PageMetadata> {
 		const html = await response.text();
 		const baseUrl = new URL(url);
 
+		const faviconCandidate = extractFavicon(html, baseUrl);
+		const favicon = faviconCandidate ? await resolveFaviconUrl(faviconCandidate) : null;
+
 		return {
 			title: extractTitle(html),
 			description: extractDescription(html),
-			favicon: extractFavicon(html, baseUrl)
+			favicon
 		};
 	} catch (error) {
 		console.error(`Failed to fetch metadata for ${url}:`, error);
@@ -95,6 +98,24 @@ function extractFavicon(html: string, baseUrl: URL): string | null {
 
 	// Default to /favicon.ico
 	return `${baseUrl.origin}/favicon.ico`;
+}
+
+export async function resolveFaviconUrl(faviconUrl: string): Promise<string | null> {
+	try {
+		const response = await fetch(faviconUrl, {
+			method: 'HEAD',
+			redirect: 'follow',
+			signal: AbortSignal.timeout(5000)
+		});
+		
+		if (!response.ok || response.headers.get('content-length') === '0') {
+			return null;
+		}
+		
+		return response.url;
+	} catch {
+		return null;
+	}
 }
 
 function resolveUrl(path: string, baseUrl: URL): string {
