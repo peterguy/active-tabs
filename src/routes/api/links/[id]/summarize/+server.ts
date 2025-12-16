@@ -3,6 +3,7 @@ import { links } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';
 import { json, error } from '@sveltejs/kit';
 import { generateSummary, fetchPageContent, isOllamaAvailable } from '$lib/server/ollama';
+import { fetchServiceContent, getServiceForUrl } from '$lib/server/service-fetchers';
 import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ params, request }) => {
@@ -27,7 +28,18 @@ export const POST: RequestHandler = async ({ params, request }) => {
 		return json({ success: true, summary: link.summary, cached: true });
 	}
 
-	const content = await fetchPageContent(link.url);
+	// Try service-specific content fetching first (for Notion, GitHub, Linear, etc.)
+	let content: string | null = null;
+	const service = getServiceForUrl(link.url);
+	if (service) {
+		content = await fetchServiceContent(link.url);
+	}
+	
+	// Fall back to generic HTTP fetch for regular web pages
+	if (!content) {
+		content = await fetchPageContent(link.url);
+	}
+	
 	if (!content) {
 		throw error(400, 'Could not fetch page content for summarization');
 	}

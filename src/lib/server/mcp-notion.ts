@@ -330,7 +330,7 @@ async function ensureMCPConnected(): Promise<boolean> {
 /**
  * Fetch a Notion page title and description using the MCP notion-fetch tool
  */
-export async function fetchNotionPageViaMCP(pageIdOrUrl: string): Promise<{ title: string; description?: string } | null> {
+export async function fetchNotionPageViaMCP(pageIdOrUrl: string): Promise<{ title: string; description?: string; content?: string } | null> {
 	// Ensure we're connected (lazy init if needed)
 	if (!await ensureMCPConnected()) {
 		console.log('MCP: Not connected and cannot lazy-connect');
@@ -403,7 +403,7 @@ export async function fetchNotionPageViaMCP(pageIdOrUrl: string): Promise<{ titl
 							}
 							
 							console.log('MCP: Extracted title:', parsed.title, 'description:', description?.slice(0, 50));
-							return { title: parsed.title, description };
+							return { title: parsed.title, description, content: parsed.text };
 						}
 					} catch {
 						// Not valid JSON, fall through to regex parsing

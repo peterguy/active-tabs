@@ -335,3 +335,101 @@ export async function fetchServiceMetadata(url: string): Promise<PageMetadata | 
 			return null;
 	}
 }
+
+/**
+ * Fetch full content for summarization from service-specific APIs.
+ * Returns the text content that can be sent to an LLM for summarization.
+ */
+export async function fetchServiceContent(url: string): Promise<string | null> {
+	const service = getServiceForUrl(url);
+
+	switch (service) {
+		case 'notion':
+			return fetchNotionContent(url);
+		case 'github':
+			return fetchGitHubContent(url);
+		case 'linear':
+			return fetchLinearContent(url);
+		default:
+			return null;
+	}
+}
+
+async function fetchNotionContent(url: string): Promise<string | null> {
+	try {
+		const result = await fetchNotionPageViaMCP(url);
+		if (result?.content) {
+			return result.content;
+		}
+		// Fall back to description if no full content
+		if (result?.description) {
+			return `Title: ${result.title}\n\n${result.description}`;
+		}
+	} catch (error) {
+		console.error('Failed to fetch Notion content:', error);
+	}
+	return null;
+}
+
+async function fetchGitHubContent(url: string): Promise<string | null> {
+	const cred = await getCredential('github');
+	if (!cred) return null;
+
+	const match = url.match(/github\.com\/([^/]+)\/([^/]+)\/(pull|issues)\/(\d+)/);
+	if (!match) return null;
+
+	const [, owner, repo, type, number] = match;
+	const apiUrl = `https://api.github.com/repos/${owner}/${repo}/${type === 'pull' ? 'pulls' : 'issues'}/${number}`;
+
+	try {
+		const response = await fetch(apiUrl, {
+			headers: {
+				'Authorization': `Bearer ${cred.token}`,
+				'Accept': 'application/vnd.github.v3+json',
+				'User-Agent': 'ActiveTabs/1.0'
+			}
+		});
+
+		if (!response.ok) return null;
+
+		const data = await response.json();
+		const prefix = type === 'pull' ? 'Pull Request' : 'Issue';
+		
+		return `${prefix} #${number}: ${data.title}\n\nState: ${data.state}\n\n${data.body || ''}`;
+	} catch {
+		return null;
+	}
+}
+
+async function fetchLinearContent(url: string): Promise<string | null> {
+	const cred = await getCredential('linear');
+	if (!cred) return null;
+
+	const issueMatch = url.match(/linear\.app\/[^/]+\/issue\/([A-Z]+-\d+)/i);
+	if (!issueMatch) return null;
+
+	const issueId = issueMatch[1].toUpperCase();
+
+	try {
+		const response = await fetch('https://api.linear.app/graphql', {
+			method: 'POST',
+			headers: {
+				'Authorization': cred.token,
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({
+				query: `query { issue(id: "${issueId}") { title description state { name } priority } }`
+			})
+		});
+
+		if (!response.ok) return null;
+
+		const data = await response.json();
+		const issue = data.data?.issue;
+		if (!issue) return null;
+
+		return `Issue ${issueId}: ${issue.title}\n\nState: ${issue.state?.name || 'Unknown'}\nPriority: ${issue.priority || 'None'}\n\n${issue.description || ''}`;
+	} catch {
+		return null;
+	}
+}
