@@ -17,8 +17,7 @@ export const load: PageServerLoad = async ({ url }) => {
 		},
 		orderBy: [
 			desc(links.pinned),
-			desc(links.lastClickedAt),
-			desc(links.clickCount),
+			links.sortOrder,
 			desc(links.createdAt)
 		]
 	});

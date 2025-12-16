@@ -7,6 +7,10 @@
 	let searchQuery = $state(data.search);
 	let animatingPinId: string | null = $state(null);
 	let refreshingId: string | null = $state(null);
+	let summarizingId: string | null = $state(null);
+	let expandedSummaries: Set<string> = $state(new Set());
+	let draggedId: string | null = $state(null);
+	let dragOverId: string | null = $state(null);
 
 	$effect(() => {
 		links = structuredClone(data.links);
@@ -67,6 +71,36 @@
 		}
 	}
 
+	async function summarize(linkId: string, force = false) {
+		summarizingId = linkId;
+		try {
+			const res = await fetch(`/api/links/${linkId}/summarize`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ force })
+			});
+			const result = await res.json();
+			if (result.success && result.summary) {
+				links = links.map(l =>
+					l.id === linkId ? { ...l, summary: result.summary } : l
+				);
+				expandedSummaries = new Set([...expandedSummaries, linkId]);
+			}
+		} finally {
+			summarizingId = null;
+		}
+	}
+
+	function toggleSummary(linkId: string) {
+		if (expandedSummaries.has(linkId)) {
+			const next = new Set(expandedSummaries);
+			next.delete(linkId);
+			expandedSummaries = next;
+		} else {
+			expandedSummaries = new Set([...expandedSummaries, linkId]);
+		}
+	}
+
 	function formatRelativeTime(date: Date | null): string {
 		if (!date) return 'never';
 		const now = new Date();
@@ -102,6 +136,56 @@
 			params.set('tag', tagId);
 			goto(`/?${params.toString()}`);
 		}
+	}
+
+	function handleDragStart(e: DragEvent, linkId: string) {
+		draggedId = linkId;
+		if (e.dataTransfer) {
+			e.dataTransfer.effectAllowed = 'move';
+		}
+	}
+
+	function handleDragOver(e: DragEvent, linkId: string) {
+		e.preventDefault();
+		if (draggedId && draggedId !== linkId) {
+			dragOverId = linkId;
+		}
+	}
+
+	function handleDragLeave() {
+		dragOverId = null;
+	}
+
+	function handleDrop(e: DragEvent, targetId: string) {
+		e.preventDefault();
+		if (!draggedId || draggedId === targetId) {
+			dragOverId = null;
+			return;
+		}
+
+		const draggedIndex = links.findIndex(l => l.id === draggedId);
+		const targetIndex = links.findIndex(l => l.id === targetId);
+
+		if (draggedIndex === -1 || targetIndex === -1) return;
+
+		const newLinks = [...links];
+		const [removed] = newLinks.splice(draggedIndex, 1);
+		newLinks.splice(targetIndex, 0, removed);
+		links = newLinks;
+
+		fetch('/api/links/reorder', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ orderedIds: newLinks.map(l => l.id) })
+		});
+
+		draggedId = null;
+		dragOverId = null;
+	}
+
+	function handleDragEnd() {
+		draggedId = null;
+		dragOverId = null;
 	}
 </script>
 
@@ -195,13 +279,19 @@
 		<ul class="space-y-3">
 			{#each links as link (link.id)}
 				<li
-					class="group flex items-start gap-4 p-4 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg border transition-all duration-300 {animatingPinId === link.id ? (link.pinned ? 'border-yellow-500 bg-yellow-500/10' : 'border-[var(--color-border)]') : 'border-[var(--color-border)]'}"
+					draggable="true"
+					ondragstart={(e) => handleDragStart(e, link.id)}
+					ondragover={(e) => handleDragOver(e, link.id)}
+					ondragleave={handleDragLeave}
+					ondrop={(e) => handleDrop(e, link.id)}
+					ondragend={handleDragEnd}
+					class="group flex items-start gap-4 p-4 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg border transition-all duration-300 cursor-grab active:cursor-grabbing {draggedId === link.id ? 'opacity-50' : ''} {dragOverId === link.id ? 'border-[var(--color-primary)] border-2' : ''} {animatingPinId === link.id ? (link.pinned ? 'border-yellow-500 bg-yellow-500/10' : 'border-[var(--color-border)]') : 'border-[var(--color-border)]'}"
 				>
 					{#if link.favicon}
 						<img
 							src={link.favicon}
 							alt=""
-							class="w-5 h-5 mt-0.5 rounded shrink-0"
+							class="w-5 h-5 mt-0.5 rounded shrink-0 {link.favicon.includes('github.githubassets.com') ? 'dark:invert' : ''}"
 							onerror={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
 						/>
 					{/if}
@@ -239,7 +329,34 @@
 									{/each}
 								</div>
 							{/if}
+							<button
+								type="button"
+								onclick={(e) => { e.preventDefault(); e.stopPropagation(); link.summary ? toggleSummary(link.id) : summarize(link.id); }}
+								class="text-xs text-[var(--color-primary)] hover:underline flex items-center gap-1"
+								disabled={summarizingId === link.id}
+							>
+								{#if summarizingId === link.id}
+									<span class="animate-pulse">Summarizing...</span>
+								{:else if link.summary}
+									{expandedSummaries.has(link.id) ? '▼ Hide' : '▶ Show'} summary
+								{:else}
+									✨ Summarize
+								{/if}
+							</button>
 						</div>
+						{#if link.summary && expandedSummaries.has(link.id)}
+							<div class="mt-3 p-3 bg-[var(--color-bg)] rounded-lg border border-[var(--color-border)]">
+								<p class="text-sm text-[var(--color-text)]">{link.summary}</p>
+								<button
+									type="button"
+									onclick={(e) => { e.preventDefault(); e.stopPropagation(); summarize(link.id, true); }}
+									class="mt-2 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+									disabled={summarizingId === link.id}
+								>
+									🔄 Regenerate
+								</button>
+							</div>
+						{/if}
 					</div>
 					<div class="flex items-center gap-1 shrink-0">
 						<button

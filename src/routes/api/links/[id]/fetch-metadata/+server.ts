@@ -20,10 +20,11 @@ export const POST: RequestHandler = async ({ params }) => {
 		updatedAt: new Date()
 	};
 
-	if (metadata.title && !link.title) {
+	// Always update with fresh metadata when explicitly refreshing
+	if (metadata.title) {
 		updates.title = metadata.title;
 	}
-	if (metadata.description && !link.description) {
+	if (metadata.description) {
 		updates.description = metadata.description;
 	}
 	if (metadata.favicon) {
