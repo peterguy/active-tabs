@@ -24,3 +24,4 @@ vite.config.ts.timestamp-*
 
 # Database
 /data/
+src/active-tabs.db
