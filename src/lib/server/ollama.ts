@@ -75,10 +75,11 @@ export async function generateSummary(
 		}
 
 		const data = await response.json();
-		const summary = data.response?.trim();
+		const rawSummary = data.response?.trim();
 
-		if (!summary) return null;
+		if (!rawSummary) return null;
 
+		const summary = cleanSummary(rawSummary);
 		return { summary, model: selectedModel };
 	} catch (error) {
 		console.error('Ollama generate error:', error);
@@ -89,17 +90,31 @@ export async function generateSummary(
 function buildSummaryPrompt(content: string, url: string, title: string | null): string {
 	const truncatedContent = content.slice(0, 4000);
 
-	return `You are a helpful assistant that summarizes web pages concisely.
+	return `Summarize the following content in 2-3 sentences. Be direct - start with the actual summary, no preamble like "Here is a summary" or "This page describes". Just state what the content is about.
 
-Summarize the following web page in 2-3 sentences. Focus on the main purpose or key information. Be direct and informative.
+${title ? `Title: ${title}\n` : ''}Content:
+${truncatedContent}`;
+}
 
-URL: ${url}
-${title ? `Title: ${title}` : ''}
-
-Content:
-${truncatedContent}
-
-Summary:`;
+/**
+ * Strip common LLM preamble patterns from summaries
+ */
+function cleanSummary(summary: string): string {
+	// Patterns to strip from the beginning
+	const preamblePatterns = [
+		/^here\s+is\s+(a\s+)?(the\s+)?\d*-?\s*sentence\s+summary[^:]*:\s*/i,
+		/^here\s+is\s+(a\s+)?(the\s+)?summary[^:]*:\s*/i,
+		/^summary[^:]*:\s*/i,
+		/^this\s+(page|document|article|content)\s+(describes|is about|discusses|explains)[^.]*\.\s*/i,
+		/^the\s+(page|document|article|content)\s+(describes|is about|discusses|explains)[^.]*\.\s*/i,
+	];
+	
+	let cleaned = summary.trim();
+	for (const pattern of preamblePatterns) {
+		cleaned = cleaned.replace(pattern, '');
+	}
+	
+	return cleaned.trim();
 }
 
 export async function fetchPageContent(url: string): Promise<string | null> {

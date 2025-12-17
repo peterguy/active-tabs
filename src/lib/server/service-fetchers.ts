@@ -402,19 +402,40 @@ async function fetchGitHubContent(url: string): Promise<string | null> {
 }
 
 async function fetchLinearContent(url: string): Promise<string | null> {
+	console.log('fetchLinearContent: Starting for URL:', url);
+	
 	const cred = await getCredential('linear');
-	if (!cred) return null;
+	if (!cred) {
+		console.log('fetchLinearContent: No Linear credentials found');
+		return null;
+	}
 
+	// Try issue pattern first
 	const issueMatch = url.match(/linear\.app\/[^/]+\/issue\/([A-Z]+-\d+)/i);
-	if (!issueMatch) return null;
+	if (issueMatch) {
+		const identifier = issueMatch[1].toUpperCase();
+		console.log('fetchLinearContent: Extracted issue identifier:', identifier);
+		return fetchLinearIssueContent(cred.token, identifier);
+	}
+	
+	// Try project pattern
+	const projectMatch = url.match(/linear\.app\/[^/]+\/project\/([a-z0-9-]+)/i);
+	if (projectMatch) {
+		const slugId = projectMatch[1];
+		console.log('fetchLinearContent: Extracted project slug:', slugId);
+		return fetchLinearProjectContent(cred.token, slugId);
+	}
+	
+	console.log('fetchLinearContent: URL did not match any known pattern');
+	return null;
+}
 
-	const identifier = issueMatch[1].toUpperCase();
-
+async function fetchLinearIssueContent(token: string, identifier: string): Promise<string | null> {
 	try {
 		const response = await fetch('https://api.linear.app/graphql', {
 			method: 'POST',
 			headers: {
-				'Authorization': cred.token,
+				'Authorization': token,
 				'Content-Type': 'application/json'
 			},
 			body: JSON.stringify({
@@ -440,13 +461,18 @@ async function fetchLinearContent(url: string): Promise<string | null> {
 		}
 
 		const data = await response.json();
+		console.log('fetchLinearContent: Raw response:', JSON.stringify(data).slice(0, 500));
+		
 		if (data.errors) {
 			console.error('Linear GraphQL errors:', data.errors);
 			return null;
 		}
 		
 		const issue = data.data?.issue;
-		if (!issue) return null;
+		if (!issue) {
+			console.log('fetchLinearContent: No issue in response');
+			return null;
+		}
 
 		let content = `Linear Issue ${issue.identifier}: ${issue.title}\n\nState: ${issue.state?.name || 'Unknown'}\nPriority: ${issue.priority || 'None'}\n\n${issue.description || '(No description)'}`;
 		
@@ -463,7 +489,75 @@ async function fetchLinearContent(url: string): Promise<string | null> {
 		
 		return content;
 	} catch (error) {
-		console.error('Linear content fetch error:', error);
+		console.error('Linear issue content fetch error:', error);
+		return null;
+	}
+}
+
+async function fetchLinearProjectContent(token: string, slugId: string): Promise<string | null> {
+	try {
+		const response = await fetch('https://api.linear.app/graphql', {
+			method: 'POST',
+			headers: {
+				'Authorization': token,
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({
+				query: `
+					query GetProject($slugId: String!) {
+						project(id: $slugId) {
+							name
+							description
+							state
+							progress
+							projectUpdates(first: 5) {
+								nodes {
+									body
+									createdAt
+								}
+							}
+						}
+					}
+				`,
+				variables: { slugId }
+			})
+		});
+
+		if (!response.ok) {
+			console.error('Linear project content fetch error:', response.status);
+			return null;
+		}
+
+		const data = await response.json();
+		console.log('fetchLinearProjectContent: Raw response:', JSON.stringify(data).slice(0, 500));
+		
+		if (data.errors) {
+			console.error('Linear GraphQL errors:', data.errors);
+			return null;
+		}
+		
+		const project = data.data?.project;
+		if (!project) {
+			console.log('fetchLinearProjectContent: No project in response');
+			return null;
+		}
+
+		let content = `Linear Project: ${project.name}\n\nState: ${project.state || 'Unknown'}\nProgress: ${Math.round((project.progress || 0) * 100)}%\n\n${project.description || '(No description)'}`;
+		
+		// Include recent updates
+		const updates = project.projectUpdates?.nodes || [];
+		if (updates.length > 0) {
+			content += '\n\n--- Recent Updates ---\n';
+			for (const update of updates) {
+				if (update.body) {
+					content += `\n${update.body.slice(0, 500)}\n`;
+				}
+			}
+		}
+		
+		return content;
+	} catch (error) {
+		console.error('Linear project content fetch error:', error);
 		return null;
 	}
 }
