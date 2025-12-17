@@ -67,15 +67,18 @@
 		</ul>
 	</section>
 
-	<section class="p-4 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
-		<h3 class="font-medium mb-2">🤖 LLM Summaries</h3>
-		<p class="text-sm text-[var(--color-text-muted)] mb-3">
-			Active Tabs can generate AI summaries of your links using Ollama, a local LLM runner.
-		</p>
-		<ol class="text-sm text-[var(--color-text-muted)] space-y-2 list-decimal list-inside">
-			<li>Install Ollama from <a href="https://ollama.ai" target="_blank" rel="noopener noreferrer" class="text-[var(--color-primary)] hover:underline">ollama.ai</a></li>
-			<li>Run <code class="px-1 py-0.5 bg-[var(--color-bg)] rounded">ollama run llama3.2</code> to download and start a model</li>
-			<li>Click "✨ Summarize" on any link to generate a summary</li>
-		</ol>
+	<section>
+		<h2 class="text-lg font-medium mb-4">AI Features</h2>
+		<a
+			href="/help/ollama"
+			class="flex items-center gap-4 p-4 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] rounded-lg border border-[var(--color-border)] transition-colors"
+		>
+			<span class="text-2xl">🤖</span>
+			<div class="flex-1">
+				<h3 class="font-medium">LLM Summaries with Ollama</h3>
+				<p class="text-sm text-[var(--color-text-muted)]">Set up local AI to generate summaries of your links</p>
+			</div>
+			<span class="text-[var(--color-text-muted)]">→</span>
+		</a>
 	</section>
 </main>
