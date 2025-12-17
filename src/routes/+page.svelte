@@ -56,12 +56,18 @@
 			if (result.success && result.metadata) {
 				links = links.map(l => {
 					if (l.id === linkId) {
-						return {
+						const updated = {
 							...l,
 							title: result.metadata.title || l.title,
 							description: result.metadata.description || l.description,
 							favicon: result.metadata.favicon || l.favicon
 						};
+						// Include auto-generated summary if available
+						if (result.summary) {
+							updated.summary = result.summary;
+							expandedSummaries = new Set([...expandedSummaries, linkId]);
+						}
+						return updated;
 					}
 					return l;
 				});
