@@ -56,9 +56,10 @@ async function loadPersistedState(): Promise<void> {
 		const cred = await getCredential(MCP_SERVICE_KEY);
 		if (cred) {
 			const data = JSON.parse(cred.token);
-			console.log('MCP: Parsed persisted data, has tokens:', !!data.tokens, 'has clientInfo:', !!data.clientInfo);
+			console.log('MCP: Parsed persisted data, has tokens:', !!data.tokens, 'has clientInfo:', !!data.clientInfo, 'has redirectUrl:', !!data.redirectUrl);
 			if (data.tokens) oauthState.tokens = data.tokens;
 			if (data.clientInfo) oauthState.clientInfo = data.clientInfo;
+			if (data.redirectUrl) oauthState.redirectUrl = data.redirectUrl;
 			console.log('MCP: Loaded persisted OAuth state');
 		} else {
 			console.log('MCP: No persisted state found');
@@ -75,7 +76,8 @@ async function persistState(): Promise<void> {
 	try {
 		const data = JSON.stringify({
 			tokens: oauthState.tokens,
-			clientInfo: oauthState.clientInfo
+			clientInfo: oauthState.clientInfo,
+			redirectUrl: oauthState.redirectUrl
 		});
 		// @ts-expect-error - extending ServiceType temporarily
 		await saveCredential(MCP_SERVICE_KEY, 'oauth', { token: data });
@@ -167,9 +169,9 @@ export async function initNotionMCP(baseUrl: string): Promise<{ needsAuth: boole
 		await loadPersistedState();
 	}
 	
-	// If we have tokens (from memory or DB), try to reconnect
-	if (oauthState.tokens && !mcpClient) {
-		console.log('MCP: Found existing tokens, attempting reconnection...');
+	// If we have tokens AND clientInfo (from memory or DB), try to reconnect
+	if (oauthState.tokens && oauthState.clientInfo && !mcpClient) {
+		console.log('MCP: Found existing tokens and clientInfo, attempting reconnection...');
 		const provider = createOAuthProvider(redirectUrl);
 		
 		mcpClient = new Client(
@@ -298,9 +300,9 @@ async function ensureMCPConnected(): Promise<boolean> {
 		await loadPersistedState();
 	}
 	
-	if (oauthState.tokens && !mcpClient) {
+	if (oauthState.tokens && oauthState.clientInfo && !mcpClient) {
 		console.log('MCP: Lazy-connecting with persisted tokens...');
-		const redirectUrl = oauthState.redirectUrl || '';
+		const redirectUrl = oauthState.redirectUrl || 'http://localhost:5173/api/auth/notion-mcp/callback';
 		const provider = createOAuthProvider(redirectUrl);
 		
 		mcpClient = new Client(
