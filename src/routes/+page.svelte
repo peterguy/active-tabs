@@ -339,10 +339,10 @@
 								type="button"
 								onclick={(e) => { e.preventDefault(); e.stopPropagation(); link.summary ? toggleSummary(link.id) : summarize(link.id); }}
 								class="text-xs text-[var(--color-primary)] hover:underline flex items-center gap-1"
-								disabled={summarizingId === link.id}
+								disabled={summarizingId === link.id || refreshingId === link.id}
 							>
-								{#if summarizingId === link.id}
-									<span class="animate-pulse">Summarizing...</span>
+								{#if summarizingId === link.id || refreshingId === link.id}
+									<span class="animate-pulse">🤖 Generating summary...</span>
 								{:else if link.summary}
 									{expandedSummaries.has(link.id) ? '▼ Hide' : '▶ Show'} summary
 								{:else}
