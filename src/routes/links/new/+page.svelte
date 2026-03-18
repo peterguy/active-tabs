@@ -3,6 +3,10 @@
 	import type { ActionData } from './$types';
 
 	let { form }: { form: ActionData } = $props();
+	
+	// Type for duplicate link error response
+	type FormWithDuplicate = ActionData & { existingLinkId?: string; existingLinkTitle?: string };
+	const formData = $derived(form as FormWithDuplicate);
 </script>
 
 <svelte:head>
@@ -15,9 +19,19 @@
 		<h1 class="text-2xl font-bold mt-4">Add New Link</h1>
 	</header>
 
-	{#if form?.error}
+	{#if formData?.error}
 		<div class="mb-4 p-3 bg-red-900/50 border border-red-500 rounded-lg text-red-200">
-			{form.error}
+			{formData.error}
+			{#if formData.existingLinkId}
+				<div class="mt-2">
+					<a 
+						href="/links/{formData.existingLinkId}/edit" 
+						class="text-blue-400 hover:text-blue-300 underline"
+					>
+						View "{formData.existingLinkTitle}" →
+					</a>
+				</div>
+			{/if}
 		</div>
 	{/if}
 
