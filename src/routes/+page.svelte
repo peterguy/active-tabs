@@ -120,17 +120,22 @@
 		return `${days}d ago`;
 	}
 
-	function handleSearch(e: Event) {
-		e.preventDefault();
-		const params = new URLSearchParams();
-		if (searchQuery) params.set('q', searchQuery);
-		if (data.tagFilter) params.set('tag', data.tagFilter);
-		goto(`/?${params.toString()}`, { keepFocus: true });
+	let searchTimeout: ReturnType<typeof setTimeout> | null = null;
+	
+	function handleSearchInput() {
+		// Debounce search - wait 300ms after user stops typing
+		if (searchTimeout) clearTimeout(searchTimeout);
+		searchTimeout = setTimeout(() => {
+			const params = new URLSearchParams();
+			if (searchQuery.trim()) params.set('q', searchQuery.trim());
+			if (data.tagFilter) params.set('tag', data.tagFilter);
+			goto(`/?${params.toString()}`, { keepFocus: true, replaceState: true });
+		}, 300);
 	}
 
 	function clearFilters() {
 		searchQuery = '';
-		goto('/');
+		goto('/', { replaceState: true });
 	}
 
 	function filterByTag(tagId: string) {
@@ -182,7 +187,7 @@
 		fetch('/api/links/reorder', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ orderedIds: newLinks.map(l => l.id) })
+			body: JSON.stringify({ orderedIds: newLinks.map(l => l.id), movedId: draggedId })
 		});
 
 		draggedId = null;
@@ -206,20 +211,15 @@
 	</header>
 
 	<div class="flex gap-3 mb-6">
-		<form onsubmit={handleSearch} class="flex-1 flex gap-2">
+		<div class="flex-1">
 			<input
 				type="search"
 				bind:value={searchQuery}
+				oninput={handleSearchInput}
 				placeholder="Search links..."
-				class="flex-1 px-4 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)]"
+				class="w-full px-4 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] text-[var(--color-text)]"
 			/>
-			<button
-				type="submit"
-				class="px-4 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] hover:bg-[var(--color-surface-hover)] rounded-lg transition-colors"
-			>
-				Search
-			</button>
-		</form>
+		</div>
 		<a
 			href="/links/new"
 			class="inline-flex items-center gap-2 px-4 py-2 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white rounded-lg transition-colors"
