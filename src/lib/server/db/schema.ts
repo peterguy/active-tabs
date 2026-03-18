@@ -12,6 +12,7 @@ export const links = sqliteTable('links', {
 	sortOrder: integer('sort_order').default(0).notNull(),
 	clickCount: integer('click_count').default(0).notNull(),
 	lastClickedAt: integer('last_clicked_at', { mode: 'timestamp' }),
+	lastManualSort: integer('last_manual_sort', { mode: 'timestamp' }),
 	createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
 	updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull()
 });

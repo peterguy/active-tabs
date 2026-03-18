@@ -5,11 +5,17 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ request }) => {
-	const { orderedIds } = await request.json() as { orderedIds: string[] };
+	const { orderedIds, movedId } = await request.json() as { orderedIds: string[]; movedId?: string };
 	
+	const now = new Date();
 	for (let i = 0; i < orderedIds.length; i++) {
+		const isMovedLink = orderedIds[i] === movedId;
 		await db.update(links)
-			.set({ sortOrder: i })
+			.set({ 
+				sortOrder: i,
+				// Mark the moved link as manually sorted
+				...(isMovedLink ? { lastManualSort: now } : {})
+			})
 			.where(eq(links.id, orderedIds[i]));
 	}
 	

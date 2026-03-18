@@ -1,9 +1,19 @@
 import { db } from '$lib/server/db';
 import { links, tags, linkTags } from '$lib/server/db/schema';
 import { desc, eq, like, or, inArray } from 'drizzle-orm';
+import { runLinkDecay } from '$lib/server/link-decay';
 import type { PageServerLoad } from './$types';
 
+let lastDecayRun = 0;
+const DECAY_INTERVAL_MS = 60 * 60 * 1000; // Run decay at most once per hour
+
 export const load: PageServerLoad = async ({ url }) => {
+	// Run decay periodically (not on every page load)
+	const now = Date.now();
+	if (now - lastDecayRun > DECAY_INTERVAL_MS) {
+		lastDecayRun = now;
+		runLinkDecay().catch(err => console.error('Link decay failed:', err));
+	}
 	const search = url.searchParams.get('q')?.trim() || '';
 	const tagFilter = url.searchParams.get('tag') || '';
 
