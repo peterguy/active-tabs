@@ -350,6 +350,8 @@ export async function fetchServiceContent(url: string): Promise<string | null> {
 			return fetchGitHubContent(url);
 		case 'linear':
 			return fetchLinearContent(url);
+		case 'google':
+			return fetchGoogleContent(url);
 		default:
 			return null;
 	}
@@ -558,6 +560,154 @@ async function fetchLinearProjectContent(token: string, slugId: string): Promise
 		return content;
 	} catch (error) {
 		console.error('Linear project content fetch error:', error);
+		return null;
+	}
+}
+
+async function fetchGoogleContent(url: string): Promise<string | null> {
+	const accessToken = await getValidAccessToken();
+	if (!accessToken) {
+		console.log('fetchGoogleContent: No valid access token');
+		return null;
+	}
+
+	// Match Google Docs URLs
+	const docsMatch = url.match(/docs\.google\.com\/document\/d\/([a-zA-Z0-9_-]+)/);
+	if (docsMatch) {
+		return fetchGoogleDocContent(accessToken, docsMatch[1]);
+	}
+
+	// Match Google Sheets URLs
+	const sheetsMatch = url.match(/docs\.google\.com\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+	if (sheetsMatch) {
+		return fetchGoogleSheetContent(accessToken, sheetsMatch[1]);
+	}
+
+	return null;
+}
+
+async function fetchGoogleDocContent(accessToken: string, docId: string): Promise<string | null> {
+	try {
+		const response = await fetch(
+			`https://docs.googleapis.com/v1/documents/${docId}`,
+			{
+				headers: { Authorization: `Bearer ${accessToken}` }
+			}
+		);
+
+		if (!response.ok) {
+			console.error('Google Docs API error:', response.status, await response.text());
+			return null;
+		}
+
+		const data = await response.json();
+		const title = data.title || 'Google Doc';
+		
+		// Extract text from document body
+		const bodyContent = data.body?.content || [];
+		const textContent = extractTextFromGoogleDocContent(bodyContent);
+		
+		return `Title: ${title}\n\n${textContent}`;
+	} catch (error) {
+		console.error('Google Docs content fetch error:', error);
+		return null;
+	}
+}
+
+function extractTextFromGoogleDocContent(content: unknown[]): string {
+	let text = '';
+	
+	for (const element of content) {
+		const elem = element as Record<string, unknown>;
+		
+		if (elem.paragraph) {
+			const paragraph = elem.paragraph as { elements?: unknown[] };
+			const elements = paragraph.elements || [];
+			for (const paragraphElement of elements) {
+				const pElem = paragraphElement as { textRun?: { content?: string } };
+				if (pElem.textRun?.content) {
+					text += pElem.textRun.content;
+				}
+			}
+		} else if (elem.table) {
+			// Extract text from table cells
+			const table = elem.table as { tableRows?: unknown[] };
+			const tableRows = table.tableRows || [];
+			for (const row of tableRows) {
+				const tableRow = row as { tableCells?: unknown[] };
+				const cells = tableRow.tableCells || [];
+				for (const cell of cells) {
+					const tableCell = cell as { content?: unknown[] };
+					if (tableCell.content) {
+						text += extractTextFromGoogleDocContent(tableCell.content);
+					}
+				}
+			}
+		} else if (elem.tableOfContents) {
+			const toc = elem.tableOfContents as { content?: unknown[] };
+			if (toc.content) {
+				text += extractTextFromGoogleDocContent(toc.content);
+			}
+		}
+	}
+	
+	return text;
+}
+
+async function fetchGoogleSheetContent(accessToken: string, sheetId: string): Promise<string | null> {
+	try {
+		// First get the spreadsheet metadata to get title and sheet names
+		const metaResponse = await fetch(
+			`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}?fields=properties.title,sheets.properties.title`,
+			{
+				headers: { Authorization: `Bearer ${accessToken}` }
+			}
+		);
+
+		if (!metaResponse.ok) {
+			console.error('Google Sheets API error:', metaResponse.status, await metaResponse.text());
+			return null;
+		}
+
+		const metaData = await metaResponse.json();
+		const title = metaData.properties?.title || 'Google Sheet';
+		const sheets = metaData.sheets || [];
+		
+		// Get the first sheet's data (usually the most important)
+		const firstSheetName = sheets[0]?.properties?.title || 'Sheet1';
+		
+		const dataResponse = await fetch(
+			`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${encodeURIComponent(firstSheetName)}?majorDimension=ROWS`,
+			{
+				headers: { Authorization: `Bearer ${accessToken}` }
+			}
+		);
+
+		if (!dataResponse.ok) {
+			// If we can't get data, at least return the title and sheet names
+			const sheetNames = sheets.map((s: { properties?: { title?: string } }) => s.properties?.title).filter(Boolean);
+			return `Spreadsheet: ${title}\n\nSheets: ${sheetNames.join(', ')}`;
+		}
+
+		const dataResult = await dataResponse.json();
+		const values = dataResult.values || [];
+		
+		// Convert first few rows to text (limit to avoid huge content)
+		const maxRows = 20;
+		const rowsToInclude = values.slice(0, maxRows);
+		let content = `Spreadsheet: ${title}\n\n`;
+		
+		for (const row of rowsToInclude) {
+			content += (row as string[]).join(' | ') + '\n';
+		}
+		
+		if (values.length > maxRows) {
+			content += `\n... and ${values.length - maxRows} more rows`;
+		}
+		
+		return content;
+	} catch (error) {
+		console.error('Google Sheets content fetch error:', error);
 		return null;
 	}
 }
