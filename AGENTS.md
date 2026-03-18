@@ -32,7 +32,7 @@ pnpm db:studio    # Open Drizzle Studio
 - Store secrets/tokens encrypted in SQLite
 
 ## Agent Instructions
-- Use `bd` for all documentation and planning artifacts
+- **ALWAYS use `bd` for project tracking** - plans, decisions, progress updates, task breakdowns, and any documentation/planning artifacts should be stored using the `bd` CLI tool, not in markdown files or inline
 - Run `pnpm check` after making TypeScript changes
 - Run `pnpm lint` after making any code changes
 - Test OAuth integrations manually with real tokens
