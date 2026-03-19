@@ -5,8 +5,10 @@ const currentUrlEl = document.getElementById("current-url");
 const addBtn = document.getElementById("add-btn");
 const statusEl = document.getElementById("status");
 const linksListEl = document.getElementById("links-list");
+const searchInput = document.getElementById("search-input");
 
 let currentTab = null;
+let allLinks = [];
 
 async function init() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -24,10 +26,23 @@ async function loadLinks() {
     const res = await fetch(`${BASE_URL}/api/links`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    renderLinks(data.links);
+    allLinks = data.links;
+    filterAndRender();
   } catch (err) {
     linksListEl.innerHTML = `<div class="empty">Could not load links. Is Active Tabs running?</div>`;
   }
+}
+
+function filterAndRender() {
+  const query = (searchInput.value || "").toLowerCase().trim();
+  const filtered = query
+    ? allLinks.filter(
+        (l) =>
+          (l.title || "").toLowerCase().includes(query) ||
+          l.url.toLowerCase().includes(query)
+      )
+    : allLinks;
+  renderLinks(filtered);
 }
 
 function renderLinks(links) {
@@ -82,6 +97,8 @@ function showStatus(message, type) {
     }, 3000);
   }
 }
+
+searchInput.addEventListener("input", filterAndRender);
 
 addBtn.addEventListener("click", async () => {
   if (!currentTab) return;

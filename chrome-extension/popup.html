@@ -112,6 +112,29 @@
       color: #94a3b8;
     }
 
+    .search-bar {
+      padding: 6px 16px 8px;
+    }
+
+    .search-bar input {
+      width: 100%;
+      padding: 6px 10px;
+      background: #2a2a4a;
+      border: 1px solid #3a3a5a;
+      border-radius: 5px;
+      color: #e2e8f0;
+      font-size: 12px;
+      outline: none;
+    }
+
+    .search-bar input:focus {
+      border-color: #7c3aed;
+    }
+
+    .search-bar input::placeholder {
+      color: #64748b;
+    }
+
     .links-list {
       flex: 1;
       overflow-y: auto;
@@ -199,6 +222,9 @@
 
   <div class="links-section">
     <div class="links-header">Saved Links</div>
+    <div class="search-bar">
+      <input type="text" id="search-input" placeholder="Search links...">
+    </div>
     <div class="links-list" id="links-list">
       <div class="loading">Loading...</div>
     </div>
