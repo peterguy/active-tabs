@@ -32,6 +32,23 @@
       font-size: 15px;
       font-weight: 600;
       color: #a78bfa;
+      flex: 1;
+    }
+
+    .open-app-link {
+      font-size: 12px;
+      color: #a78bfa;
+      text-decoration: none;
+      padding: 4px 10px;
+      border: 1px solid #a78bfa;
+      border-radius: 5px;
+      transition: background 0.15s, color 0.15s;
+      white-space: nowrap;
+    }
+
+    .open-app-link:hover {
+      background: #a78bfa;
+      color: #1a1a2e;
     }
 
     .current-tab {
@@ -210,6 +227,7 @@
 <body>
   <header>
     <h1>Active Tabs</h1>
+    <a class="open-app-link" href="http://localhost:5174" target="_blank" rel="noopener">Open Web App ↗</a>
   </header>
 
   <div class="current-tab">
