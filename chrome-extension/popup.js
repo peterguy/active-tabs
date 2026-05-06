@@ -21,12 +21,56 @@ async function init() {
   loadLinks();
 }
 
+// Mirror the server-side normalization in src/routes/api/links/+server.ts
+function normalizeUrl(url) {
+  try {
+    const parsed = new URL(url);
+    let normalized = `${parsed.protocol}//${parsed.host.toLowerCase()}${parsed.pathname}`;
+    if (
+      normalized.endsWith("/") &&
+      normalized !== `${parsed.protocol}//${parsed.host.toLowerCase()}/`
+    ) {
+      normalized = normalized.slice(0, -1);
+    }
+    if (parsed.search) normalized += parsed.search;
+    if (parsed.hash) normalized += parsed.hash;
+    return normalized;
+  } catch {
+    return url;
+  }
+}
+
+function findExistingLink() {
+  if (!currentTab || !currentTab.url) return null;
+  const targetRaw = currentTab.url;
+  const targetNormalized = normalizeUrl(targetRaw);
+  return (
+    allLinks.find((l) => {
+      if (l.url === targetRaw) return true;
+      return normalizeUrl(l.url) === targetNormalized;
+    }) || null
+  );
+}
+
+function updateAddButtonState(existing) {
+  if (existing) {
+    addBtn.disabled = true;
+    addBtn.textContent = "Already in Active Tabs";
+    addBtn.classList.add("already-saved");
+  } else {
+    addBtn.disabled = false;
+    addBtn.textContent = "Add to Active Tabs";
+    addBtn.classList.remove("already-saved");
+  }
+}
+
 async function loadLinks() {
   try {
     const res = await fetch(`${BASE_URL}/api/links`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     allLinks = data.links;
+    updateAddButtonState(findExistingLink());
     filterAndRender();
   } catch (err) {
     linksListEl.innerHTML = `<div class="empty">Could not load links. Is Active Tabs running?</div>`;
@@ -115,6 +159,7 @@ addBtn.addEventListener("click", async () => {
 
     if (res.status === 409) {
       showStatus("This link is already saved.", "duplicate");
+      await loadLinks();
     } else if (!res.ok) {
       throw new Error(`HTTP ${res.status}`);
     } else {
@@ -123,7 +168,6 @@ addBtn.addEventListener("click", async () => {
     }
   } catch (err) {
     showStatus("Failed to add link. Is Active Tabs running?", "error");
-  } finally {
     addBtn.disabled = false;
     addBtn.textContent = "Add to Active Tabs";
   }
