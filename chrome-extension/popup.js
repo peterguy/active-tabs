@@ -24,17 +24,22 @@ async function init() {
 // Mirror the server-side normalization in src/routes/api/links/+server.ts,
 // but also drop the URL fragment (hash) so that in-page anchors like
 // `#heading=...` don't prevent us from recognizing a saved link.
+//
+// For Google Docs/Sheets/Slides/Forms we also drop the query string,
+// because the URL changes based on the active doc tab (e.g. `?tab=t.0`
+// vs `?tab=t.602kmuywcbej`) even though it's the same document.
 function normalizeUrl(url) {
   try {
     const parsed = new URL(url);
-    let normalized = `${parsed.protocol}//${parsed.host.toLowerCase()}${parsed.pathname}`;
-    if (
-      normalized.endsWith("/") &&
-      normalized !== `${parsed.protocol}//${parsed.host.toLowerCase()}/`
-    ) {
+    const host = parsed.host.toLowerCase();
+    let normalized = `${parsed.protocol}//${host}${parsed.pathname}`;
+    if (normalized.endsWith("/") && normalized !== `${parsed.protocol}//${host}/`) {
       normalized = normalized.slice(0, -1);
     }
-    if (parsed.search) normalized += parsed.search;
+    const isGoogleDoc =
+      host === "docs.google.com" &&
+      /^\/(document|spreadsheets|presentation|forms)\//.test(parsed.pathname);
+    if (parsed.search && !isGoogleDoc) normalized += parsed.search;
     return normalized;
   } catch {
     return url;
