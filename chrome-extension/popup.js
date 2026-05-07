@@ -21,7 +21,9 @@ async function init() {
   loadLinks();
 }
 
-// Mirror the server-side normalization in src/routes/api/links/+server.ts
+// Mirror the server-side normalization in src/routes/api/links/+server.ts,
+// but also drop the URL fragment (hash) so that in-page anchors like
+// `#heading=...` don't prevent us from recognizing a saved link.
 function normalizeUrl(url) {
   try {
     const parsed = new URL(url);
@@ -33,7 +35,6 @@ function normalizeUrl(url) {
       normalized = normalized.slice(0, -1);
     }
     if (parsed.search) normalized += parsed.search;
-    if (parsed.hash) normalized += parsed.hash;
     return normalized;
   } catch {
     return url;
@@ -42,14 +43,8 @@ function normalizeUrl(url) {
 
 function findExistingLink() {
   if (!currentTab || !currentTab.url) return null;
-  const targetRaw = currentTab.url;
-  const targetNormalized = normalizeUrl(targetRaw);
-  return (
-    allLinks.find((l) => {
-      if (l.url === targetRaw) return true;
-      return normalizeUrl(l.url) === targetNormalized;
-    }) || null
-  );
+  const targetNormalized = normalizeUrl(currentTab.url);
+  return allLinks.find((l) => normalizeUrl(l.url) === targetNormalized) || null;
 }
 
 function updateAddButtonState(existing) {
