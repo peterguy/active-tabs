@@ -100,7 +100,7 @@ function renderLinks(links) {
       const faviconUrl = getFaviconUrl(link.url);
       const displayUrl = truncateUrl(link.url, 50);
       return `
-        <a class="link-item" href="${escapeHtml(link.url)}" target="_blank" rel="noopener">
+        <a class="link-item" href="${escapeHtml(link.url)}" target="_blank" rel="noopener" data-link-id="${escapeHtml(link.id)}">
           <img class="favicon" src="${escapeHtml(faviconUrl)}" alt="" onerror="this.style.display='none'">
           <div class="info">
             <div class="name">${escapeHtml(link.title || "Untitled")}</div>
@@ -110,6 +110,34 @@ function renderLinks(links) {
     })
     .join("");
 }
+
+function trackClick(linkId) {
+  if (!linkId) return;
+  try {
+    // keepalive lets the request complete even after the popup closes.
+    fetch(`${BASE_URL}/api/links/${linkId}/click`, {
+      method: "POST",
+      keepalive: true,
+    }).catch(() => {});
+  } catch {
+    // ignore — click tracking is best-effort
+  }
+}
+
+linksListEl.addEventListener("click", (event) => {
+  const anchor = event.target.closest("a.link-item");
+  if (!anchor) return;
+  trackClick(anchor.dataset.linkId);
+});
+
+// Middle-click and modifier-click (cmd/ctrl) don't always fire "click",
+// so also handle "auxclick" for middle-mouse navigation.
+linksListEl.addEventListener("auxclick", (event) => {
+  if (event.button !== 1) return;
+  const anchor = event.target.closest("a.link-item");
+  if (!anchor) return;
+  trackClick(anchor.dataset.linkId);
+});
 
 function getFaviconUrl(url) {
   try {
